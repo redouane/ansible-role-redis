@@ -1,0 +1,51 @@
+---
+
+- name: install redis dependencies
+  apt: pkg={{ item }} update_cache=yes cache_valid_time=86400 state=present
+  with_items:
+    - gcc
+    - make
+    - libc6-dev
+
+- name: Download Redis
+  get_url:
+    url=http://download.redis.io/releases/redis-{{ redis_version }}.tar.gz
+    dest=/tmp/redis-{{ redis_version }}.tar.gz
+    mode=0440
+
+- name: Extract Redis archive
+  unarchive:
+    src=/tmp/redis-{{ redis_version }}.tar.gz
+    dest=/tmp
+    creates=/tmp/redis-{{ redis_version }}
+    copy=no
+
+- name: Compile redis
+  command: make -j5
+    chdir=/tmp/redis-{{ redis_version }}
+    creates=/tmp/redis-{{ redis_version }}/src/redis-server
+
+- name: Install redis
+  command: make install
+    chdir=/tmp/redis-{{ redis_version }}
+    creates=/usr/local/bin/redis-server
+
+- name: Ensure redis working and data directory
+  file: path={{ redis_working_dir }} state=directory
+
+- name: Ensure redis cofigs directory
+  file: path=/etc/redis state=directory
+
+- name: copy init script
+  template: src=redis.init.j2 dest=/etc/init.d/redis mode=0755
+
+  # - name: enable and start redis service
+  # service: name=redis enabled=true state=stopped
+
+- name: copy redis conf
+  template: src=redis.conf.j2 dest=/etc/redis/redis.conf
+  notify:
+    - restart redis
+
+- name: enable and start redis service
+  service: name=redis enabled=yes state=started
